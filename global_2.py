@@ -1,41 +1,75 @@
-import cv2
 import numpy as np
+import cv2
+import os
+from sklearn.preprocessing import LabelEncoder
 from scipy.fftpack import dct
 
 
 # 加载数据集
-def load_data_food101(list_path):
-    # 初始化存储图像路径和标签的列表
-    img_paths = []
-    labels = []
+def load_data_food101(list_path, global_feature_type="CLD"):
+    """
+    加载数据集
+    输入：训练集/测试集图片列表的路径
+            "./food_101/meta/test.txt" or "./food_101/meta/train.txt"
+        全局特征类型（CLD，SCD，HIST）
+    输出：图片的全局特征向量
+        标签（0 - 5）
+        标签的encoder，用于转换标签
+    """
 
-    # 将食物名称映射到整数标签
-    label_str_to_int = {
-        'sushi': 1,
-        'tacos': 2,
-        'takoyaki': 3,
-        'tiramisu': 4,
-        'tuna_tartare': 5,
-        'waffles': 6,
-    }
-
-    # 打开包含图像信息的文件并读取每一行
     with open(list_path, 'r') as f:
-        lines = f.readlines()
-    for line in lines:
-        # 处理标签
-        label_str, _ = line.split('/')  # 分割行以获取图像的标签部分
-        label_int = label_str_to_int.get(label_str)  # 转换为数字表示的标签
-        labels.append(label_int)  # 将数字标签添加到标签列表
+        train_files = f.readlines()
 
-        # 构建图像的完整路径
-        img_path = '/home/hanyuji/projects/PJ4/food_101/images/' + line.strip() + '.jpg'
-        img_paths.append(img_path)  # 将图像路径添加到路径列表
-    return img_paths, labels  # 返回图像路径和对应的标签列表
+    train_files = [file.strip() for file in train_files]
+
+    data = []
+    labels = []
+    image_path = "./food_101/images/"
+
+    for index, file_name in enumerate(train_files):
+        print(f'load image: {index}')
+        file_path = os.path.join(image_path, file_name + ".jpg")
+
+        # 提取每张图片的局部特征
+        features = extract_features(file_path, global_feature_type=global_feature_type)
+
+        if len(features) > 0:
+            data.append(features)
+            label = file_name.split("/")[0]
+            labels.append(label)
+    # 如果需要对标签进行编码
+
+    label_encoder = LabelEncoder()
+    labels = label_encoder.fit_transform(labels)
+
+    return data, labels, label_encoder
+
+
+# 三种全局特征
+def extract_features(image_path, global_feature_type="CLD"):
+    """
+    提取全局特征
+    输入：单张的图片路径
+        全局特征类型（CLD，SCD，HIST）
+    输出：图片的全局特征向量
+    """
+
+    if global_feature_type == "CLD":
+        features = cld_features(image_path)
+    elif global_feature_type == "SCD":
+        features = scd_features(image_path)
+    elif global_feature_type == "HIST":
+        features = histogram_features(image_path)
+    return features
 
 
 # CLD
 def cld_features(image_path):
+    """
+    提取CLD特征
+    输入：单张的图片路径
+    输出：图片的CLD特征
+    """
     image = cv2.imread(image_path)  # 读取图像
     image = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)  # 转换到 YCrCb 颜色空间
     image = cv2.resize(image, (64, 64))  # 缩放图像到64x64像素
@@ -77,6 +111,11 @@ def cld_features(image_path):
 
 # SCD
 def scd_features(image_path, num_bins=16):
+    """
+    提取SCD特征
+    输入：单张的图片路径
+    输出：图片的SCD特征
+    """
     image = cv2.imread(image_path)  # 读取图像
     image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)  # 转换到HSV颜色空间
 
@@ -91,8 +130,13 @@ def scd_features(image_path, num_bins=16):
     return dct_features
 
 
-# 颜色直方图特征
+# HIST
 def histogram_features(image_path, bins=8):
+    """
+    提取颜色直方图特征
+    输入：单张的图片路径
+    输出：图片的颜色直方图特征
+    """
     # 读取图像并转换到 HSV 颜色空间
     image = cv2.imread(image_path)  # 读取图像
     image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)  # 转换到HSV颜色空间
