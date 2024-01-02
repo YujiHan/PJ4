@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 class DataSet(torch.utils.data.Dataset):
     def __init__(self, data_inputs, data_targets):
         self.inputs = torch.FloatTensor(data_inputs)
-        self.label = torch.FloatTensor(data_targets)
+        self.label = torch.LongTensor(data_targets)
 
     def __getitem__(self, index):
         return self.inputs[index], self.label[index]
@@ -15,7 +15,8 @@ class DataSet(torch.utils.data.Dataset):
         return len(self.inputs)
 
 
-def get_dataloader(features, labels, batch_Size=256):
+def get_dataloader(features, labels, batch_Size=200):
+    labels = labels -1
     x_train, x_test, y_train, y_test = train_test_split(
         features,
         labels,
@@ -35,7 +36,8 @@ def get_dataloader(features, labels, batch_Size=256):
     return train_dataloader, test_dataloader
 
 
-def get_test_dataloader(features, labels, batch_Size=256):
+def get_test_dataloader(features, labels, batch_Size=200):
+    labels = labels -1
     test_dataset = DataSet(np.array(features), list(labels))
 
     test_dataloader = torch.utils.data.DataLoader(

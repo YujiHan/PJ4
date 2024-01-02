@@ -2,20 +2,20 @@ import numpy as np
 import torch
 from torch import nn
 import math
+from sklearn.metrics import f1_score, accuracy_score
+from sklearn.metrics import classification_report
 
 
-device = torch.device('cuda:1')
+device = torch.device('cuda')
 
 
 class ClassificationNet(nn.Module):
     def __init__(self, dimension):
         super(ClassificationNet, self).__init__()
 
-        self.fc_1 = nn.Linear(dimension, 1024)
-        self.fc_2 = nn.Linear(1024, 1024)
-        self.fc_3 = nn.Linear(1024, 256)
-        self.fc_4 = nn.Linear(256, 32)
-        self.fc_5 = nn.Linear(32, 6)
+        self.fc_1 = nn.Linear(dimension, 256)
+        self.fc_2 = nn.Linear(256, 32)
+        self.fc_3 = nn.Linear(32, 6)
 
     def forward(self, x):
         x = self.fc_1(x)
@@ -23,11 +23,6 @@ class ClassificationNet(nn.Module):
         x = self.fc_2(x)
         x = torch.relu(x)
         x = self.fc_3(x)
-        x = torch.relu(x)
-        x = self.fc_4(x)
-        x = torch.relu(x)
-        x = self.fc_5(x)
-        x = nn.functional.softmax(x, dim=-1)
 
         return x
 
@@ -56,7 +51,7 @@ def train(
 
         # 保存当前最好的模型
         if epoch % 10 == 0:
-            cur_loss = validation(model, test_dataloader, criterion)
+            cur_loss, accuracy, f1, f1_report = test_model(model, test_dataloader)
             if cur_loss < best_loss:
                 best_loss = cur_loss
 
@@ -66,17 +61,32 @@ def train(
                     weights_dict[k] = v
                 torch.save(weights_dict, f'{model_path}/model_best.pkl')
 
-            print(f'epoch: {epoch}, train_loss: {float(loss)}, val_loss: {best_loss}')
+            print(f'epoch: {epoch}, train_loss: {float(loss)}, val_loss: {cur_loss}, accuracy: {accuracy}, f1: {f1}')
 
 
-def validation(model, test_dataloader, criterion):
-    total_lost = []
+def test_model(model, test_dataloader):
+    all_loss = []
+    all_preds = []
+    all_targets = []
+    
+    criterion = nn.CrossEntropyLoss()
     model.eval()
     with torch.no_grad():
         for x, y in test_dataloader:
             x, y = x.to(device), y.to(device)
             pred = model(x)
             loss = criterion(pred, y)
-            total_lost.append(loss.cpu().numpy())
+            all_loss.append(loss.cpu().numpy())
+            
+            _, predicted = torch.max(pred, 1)  # 获取最高概率的预测结果
+            # 将预测和真实标签添加到列表中
+            all_preds.extend(predicted.cpu().numpy())
+            all_targets.extend(y.cpu().numpy())
 
-    return np.array(total_lost).mean()
+
+    loss_average = np.array(all_loss).mean()
+    accuracy = accuracy_score(all_targets, all_preds)
+    f1 = f1_score(all_targets, all_preds, average='weighted')  # 'weighted' 可以处理不平衡的类别
+    f1_report = classification_report(all_targets, all_preds, zero_division=1)
+    
+    return loss_average, accuracy, f1, f1_report
